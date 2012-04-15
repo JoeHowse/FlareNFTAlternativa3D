@@ -2,7 +2,7 @@
 
 FlareNFTAlternativa3D.as -- A demo, integrating flare*nft and Alternativa3D.
 
-version 0.3.0, January 7th, 2012
+version 0.4.0, January 7th, 2012
 
 Copyright (c) 2011-2012 Joseph Howse
 
@@ -45,6 +45,7 @@ package
 	import flash.events.Event;
 	import flash.geom.Matrix;
 	import flash.geom.Matrix3D;
+	import flash.geom.Vector3D;
 	import flash.media.Camera;
 	import flash.media.Video;
 	import flash.net.URLLoader;
@@ -52,6 +53,7 @@ package
 	import flash.net.URLRequest;
 	import flash.utils.ByteArray;
 	import flash.utils.Dictionary;
+	import flash.utils.getTimer;
 	
 	
 	[SWF(width='640', height='480', backgroundColor='#ffffff', frameRate='60')]
@@ -70,11 +72,14 @@ package
 		private var targetMatrixRawData_:Vector.<Number> = new Vector.<Number>(16);
 		private var targetsFoundLastFrame_:Boolean = false;
 		
+		private var rotateGrazApple_:Boolean = true;
+		private var lastMilliseconds_:int = getTimer();
+		
 		
 		// Flash video camera initialization arguments.
 		private static const PREFERRED_VIDEO_CAMERA_WIDTH:int = 640;
 		private static const PREFERRED_VIDEO_CAMERA_HEIGHT:int = 480;
-		private static const PREFERRED_VIDEO_CAMERA_FPS:Number = 60;
+		private static const PREFERRED_VIDEO_CAMERA_FPS:Number = 30;
 		private static const FAVOR_AREA:Boolean = true;
 		
 		// flare*nft initialization arguments.
@@ -96,15 +101,15 @@ package
 		// Other nodes, including target subnodes, are NOT mirrored.
 		private static const MIRROR_VIDEO:Boolean = false;
 		
-		// Argument for scaling the imported 3D models.
+		// Arguments for scaling the imported 3D models.
 		// The application's units are related to a video camera's pixel pitch (and field of view).
 		// These units are typically much smaller than those used by 3D artists.
 		// Thus, the import scaling factor is large.
-		private static const IMPORT_SCALING_FACTOR:Number = 100;
+		private static const CUBE_IMPORT_SCALING_FACTOR:Number = 125;
+		private static const APPLE_IMPORT_SCALING_FACTOR:Number = 2.5;
 		
 		// Argument for showing or hiding Alternativa3D's built-in logo.
-		// See the Alternativa3D license agreement for branding requirements.
-		private static const SHOW_ALTERNATIVAPLATFORM_LOGO:Boolean = true;
+		private static const SHOW_ALTERNATIVAPLATFORM_LOGO:Boolean = false;
 		
 		// Argument for showing or hiding the performance profiling diagram.
 		private static const SHOW_PROFILING_DIAGRAM:Boolean = true;
@@ -273,9 +278,47 @@ package
 		
 		private function onFlareNFTInitDone():void
 		{
+			// Set up the NFT buttons.
+			flareNFT_.setButtonHandler(this, handleNFTButton);
+			flareNFT_.addButton(0, 420,  70, 460, 110); // Vienna on the Austria map
+			flareNFT_.addButton(2, 110, 150, 150, 190); // left clock on the Graz tower
+			flareNFT_.addButton(2, 165, 140, 210, 200); // right clock on the Graz tower
+			
 			// Listen for and request the 3D stage's graphics context.
 			stage3D_.addEventListener(Event.CONTEXT3D_CREATE, onContextCreate);
 			stage3D_.requestContext3D();
+		}
+		
+		private function handleNFTButton(targetID:uint, buttonID:uint, pressed:Boolean):void
+		{
+			if (!pressed) return;
+			
+			// Handle the NFT button press.
+			
+			// Find the apple associated with the target.
+			var apple:Object3D = (targets_[targetID] as Object3D).getChildAt(0);
+			
+			if (targetID == 0)
+			{
+				// Vienna on the Austria map was pressed.
+				// Hide/show the apple.
+				apple.visible = !apple.visible;
+			}
+			else if (targetID == 2)
+			{
+				if (buttonID == 0)
+				{
+					// The left clock on the Graz tower was pressed.
+					// Hide/show the apple.
+					apple.visible = !apple.visible;
+				}
+				else
+				{
+					// The right clock on the Graz tower was pressed.
+					// Start/stop rotating the apple.
+					rotateGrazApple_ = !rotateGrazApple_;
+				}
+			}
 		}
 		
 		private function onContextCreate(event:Event):void
@@ -284,25 +327,38 @@ package
 			
 			// Set up the targets and models.
 			
-			// Create the matrix that will represent each model's offset from the target position.
-			var offsetMatrix:Matrix3D = new Matrix3D();
-			offsetMatrix.appendTranslation(0, 0, 0.5);
-			offsetMatrix.appendScale(IMPORT_SCALING_FACTOR, IMPORT_SCALING_FACTOR, IMPORT_SCALING_FACTOR);
 			
-			var model:SimpleModel;
+			// Create the matrix that will represent the cube's offset from the target position.
+			// The cube sits atop the target.
+			var cubeOffsetMatrix:Matrix3D = new Matrix3D();
+			cubeOffsetMatrix.appendTranslation(0, 1, 0.5);
+			cubeOffsetMatrix.appendScale(CUBE_IMPORT_SCALING_FACTOR, CUBE_IMPORT_SCALING_FACTOR, CUBE_IMPORT_SCALING_FACTOR);
+			cubeOffsetMatrix.appendRotation(180, new Vector3D(1, 0, 0), new Vector3D(0, 0, 0.5 * CUBE_IMPORT_SCALING_FACTOR));
+			
+			// Create the matrix that will represent the apple's offset from the target position.
+			// The apple sits atop the cube.
+			var appleOffsetMatrix:Matrix3D = new Matrix3D();
+			appleOffsetMatrix.appendScale(APPLE_IMPORT_SCALING_FACTOR, APPLE_IMPORT_SCALING_FACTOR, APPLE_IMPORT_SCALING_FACTOR);
+			appleOffsetMatrix.appendTranslation(0, -CUBE_IMPORT_SCALING_FACTOR, CUBE_IMPORT_SCALING_FACTOR);
+			
 			var i:Number = 0;
 			for each(var file:String in ["model_austria.dae", "model_vienna.dae", "model_graz.dae"])
 			{
-				// Create the model.
-				model = new SimpleModel(stage3D_.context3D, DATA_FOLDER, file, offsetMatrix);
+				// Create the cube.
+				var cube:SimpleModel = new SimpleModel(stage3D_.context3D, DATA_FOLDER, file, cubeOffsetMatrix);
 				
-				// Associate the model with one of the target IDs.
-				targets_[i++] = model;
+				// Associate the cube with one of the target IDs.
+				targets_[i++] = cube;
 				
-				// Add the model to the 3D scene.
-				scene_.addChild(model);
+				// Add the cube to the 3D scene.
+				scene_.addChild(cube);
+				
+				// Create the apple.
+				var apple:SimpleModel = new SimpleModel(stage3D_.context3D, DATA_FOLDER, "apple.3ds", appleOffsetMatrix);
+				
+				// Add the apple as the cube's child.
+				cube.addChild(apple);
 			}
-			
 			
 			// Listen for frame updates.
 			stage.addEventListener(Event.ENTER_FRAME, onEnterFrame);
@@ -316,6 +372,10 @@ package
 		
 		private function onEnterFrame(event:Event):void
 		{
+			// Find the delta time.
+			var milliseconds:int = getTimer();
+			var deltaMilliseconds:int = milliseconds - lastMilliseconds_;
+			
 			var target:Object3D;
 				
 			// By default, hide all targets.
@@ -394,10 +454,15 @@ package
 					
 					// Show the target.
 					target.visible = true;
+					
+					if(targetID == 2 && rotateGrazApple_) {
+						// Rotate the apple atop the Graz cube at 45 degrees per second.
+						targets_[2].getChildAt(0).getChildAt(0).rotationZ += deltaMilliseconds * 0.00025 * Math.PI;
+					}
 				}
 			}
 			
-			var targetsFoundThisFrame:Boolean = numTargetsFound > 0;
+			var targetsFoundThisFrame:Boolean = (numTargetsFound > 0);
 			if(targetsFoundThisFrame || targetsFoundLastFrame_)
 			{
 				// Targets were found this frame or last frame.
@@ -408,6 +473,9 @@ package
 				// Remember whether targets were found this frame.
 				targetsFoundLastFrame_ = targetsFoundThisFrame;
 			}
+			
+			// Remember the time.
+			lastMilliseconds_ = milliseconds;
 		}
 		
 		private function onResize(event:Event = null):void

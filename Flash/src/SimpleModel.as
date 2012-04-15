@@ -3,7 +3,7 @@
 SimpleModel.as -- A simple model (static meshes and diffuse textures), loaded
                   from .dae, .3ds or .a3d for Alternativa3D.
 
-version 0.3.0, January 7th, 2012
+version 0.4.0, January 7th, 2012
 
 Copyright (c) 2011-2012 Joseph Howse
 
